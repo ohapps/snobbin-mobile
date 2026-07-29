@@ -1,0 +1,60 @@
+{
+  "expo": {
+    "name": "Snobbin",
+    "slug": "snobbin-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "snobbin",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.snobbin.mobile",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "Snobbin uses your camera to take photos of items you want to rank.",
+        "NSPhotoLibraryUsageDescription": "Snobbin uses your photo library to add images to items you rank."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#1976d2",
+        "foregroundImage": "./assets/images/icon.png"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "com.snobbin.mobile"
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#1976d2"
+        }
+      ],
+      "expo-sqlite",
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Snobbin uses your camera to take photos of items you want to rank.",
+          "photosPermission": "Snobbin uses your photo library to add images to items you rank."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {}
+    }
+  }
+}
