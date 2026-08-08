@@ -59,7 +59,7 @@ export default function HomeScreen() {
         if (profile?.lastGroupId) {
           const matchingGroup = groupsWithCounts.find((g) => g.id === profile.lastGroupId);
           if (matchingGroup) {
-            router.replace(`/group/${matchingGroup.id}`);
+            router.push(`/group/${matchingGroup.id}`);
             return;
           }
         }
