@@ -1,15 +1,13 @@
 import { db } from './database';
 import { getBackendUrl } from '../config';
 import { refreshAccessToken } from '../auth';
-
-/**
- * Tracks the last successful sync time. Use getLastSyncedAt() to read.
- */
-let _lastSyncedAt: Date | null = null;
-
-export function getLastSyncedAt(): Date | null {
-  return _lastSyncedAt;
-}
+import {
+  beginGlobalSync,
+  beginGroupSync,
+  endGlobalSync,
+  endGroupSync,
+  markSyncSuccess,
+} from '../sync-state';
 
 /**
  * Makes an authenticated GET request to the backend API.
@@ -136,6 +134,7 @@ interface GroupDetailResponse {
  * Call on app startup and pull-to-refresh.
  */
 export async function syncAllUserData(userId: string): Promise<void> {
+  beginGlobalSync();
   try {
     console.log('[Sync] Starting full sync for user:', userId);
     const data = await apiFetch<UserGroupsResponse>(`/api/mobile/user/${userId}/groups`);
@@ -175,15 +174,18 @@ export async function syncAllUserData(userId: string): Promise<void> {
       throw err;
     }
 
-    _lastSyncedAt = new Date();
+    await markSyncSuccess();
     console.log('[Sync] Full sync complete —', data.groups.length, 'groups');
 
     // Sync each group's detailed data (items, rankings, attributes)
     for (const group of data.groups) {
       await syncGroup(group.id);
     }
+
+    endGlobalSync(true);
   } catch (err) {
     console.error('[Sync] Full sync failed:', err);
+    endGlobalSync(false);
     throw err;
   }
 }
@@ -192,6 +194,7 @@ export async function syncAllUserData(userId: string): Promise<void> {
  * Fetches all data for a single group and writes to local SQLite.
  */
 export async function syncGroup(groupId: string): Promise<void> {
+  beginGroupSync(groupId);
   try {
     console.log('[Sync] Syncing group:', groupId);
     const data = await apiFetch<GroupDetailResponse>(`/api/mobile/groups/${groupId}`);
@@ -265,10 +268,12 @@ export async function syncGroup(groupId: string): Promise<void> {
       throw err;
     }
 
-    _lastSyncedAt = new Date();
+    await markSyncSuccess();
     console.log('[Sync] Group sync complete:', groupId);
   } catch (err) {
     console.error('[Sync] Group sync failed:', groupId, err);
     throw err;
+  } finally {
+    endGroupSync(groupId);
   }
 }

@@ -2,15 +2,18 @@ import { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View, Alert } from 'react-native';
 import { Avatar, Button, Divider, List, Text, Surface } from 'react-native-paper';
 import { useRouter } from 'expo-router';
-import { useAtom } from 'jotai';
-import { authStateAtom } from '../store/atoms';
+import { useAtom, useAtomValue } from 'jotai';
+import { authStateAtom, lastSyncedAtAtom, syncStatusAtom } from '../store/atoms';
 import { logout } from '../lib/auth';
-import { getSnobProfile, clearDatabase, getLastSyncedAt } from '../lib/db';
+import { getSnobProfile, clearDatabase } from '../lib/db';
+import { clearSyncState } from '../lib/sync-state';
 import { clearImageCache, getImageCacheSize } from '../lib/image-cache';
 import type { Snob } from '../types/models';
 
 export default function ProfileScreen() {
   const [authState, setAuthState] = useAtom(authStateAtom);
+  const lastSyncedAt = useAtomValue(lastSyncedAtAtom);
+  const syncStatus = useAtomValue(syncStatusAtom);
   const [profile, setProfile] = useState<Snob | null>(null);
   const [cacheSize, setCacheSize] = useState<string>('Calculating...');
   const [loggingOut, setLoggingOut] = useState(false);
@@ -38,6 +41,7 @@ export default function ProfileScreen() {
           setLoggingOut(true);
           try {
             clearDatabase();
+            await clearSyncState();
             await logout();
             setAuthState({
               accessToken: null,
@@ -114,11 +118,23 @@ export default function ProfileScreen() {
           <List.Subheader>Sync</List.Subheader>
           <List.Item
             title="Data Status"
-            description={getLastSyncedAt() ? `Last synced: ${getLastSyncedAt()!.toLocaleString()}` : 'Not yet synced'}
+            description={
+              syncStatus === 'syncing'
+                ? 'Syncing...'
+                : lastSyncedAt
+                  ? `Last synced: ${lastSyncedAt.toLocaleString()}`
+                  : 'Not yet synced'
+            }
             left={(props) => (
               <List.Icon
                 {...props}
-                icon={getLastSyncedAt() ? 'cloud-check' : 'cloud-off-outline'}
+                icon={
+                  syncStatus === 'syncing'
+                    ? 'cloud-sync'
+                    : lastSyncedAt
+                      ? 'cloud-check'
+                      : 'cloud-off-outline'
+                }
               />
             )}
           />

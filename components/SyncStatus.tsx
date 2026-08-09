@@ -1,47 +1,60 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { Banner } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { getLastSyncedAt } from '../lib/db';
+import { useAtomValue } from 'jotai';
+import { lastSyncedAtAtom, syncStatusAtom } from '../store/atoms';
 
 /**
- * Displays a banner showing the last sync time, or a warning if never synced.
- * Polls the sync state every few seconds to stay current.
+ * Shows sync progress on startup/refresh, or an offline warning only when
+ * sync has genuinely failed — not while a connection is still being established.
  */
 export default function SyncStatus() {
-  const [lastSynced, setLastSynced] = useState<Date | null>(getLastSyncedAt());
+  const syncStatus = useAtomValue(syncStatusAtom);
+  const lastSynced = useAtomValue(lastSyncedAtAtom);
   const [dismissed, setDismissed] = useState(false);
 
-  useEffect(() => {
-    // Poll sync status every 5 seconds
-    const interval = setInterval(() => {
-      setLastSynced(getLastSyncedAt());
-    }, 5000);
+  if (syncStatus === 'syncing') {
+    return (
+      <Banner
+        visible
+        style={styles.syncingBanner}
+        icon={({ size }) => (
+          <MaterialCommunityIcons name="cloud-sync-outline" size={size} color="#1565c0" />
+        )}
+      >
+        Syncing data...
+      </Banner>
+    );
+  }
 
-    return () => clearInterval(interval);
-  }, []);
+  if (syncStatus === 'error' && !dismissed) {
+    return (
+      <Banner
+        visible
+        style={styles.offlineBanner}
+        icon={({ size }) => (
+          <MaterialCommunityIcons name="cloud-off-outline" size={size} color="#1a1c1e" />
+        )}
+        actions={[
+          { label: 'Dismiss', onPress: () => setDismissed(true) },
+        ]}
+      >
+        {lastSynced
+          ? "Couldn't reach the server. Showing your saved data — pull to refresh to try again."
+          : 'Working offline. Pull to refresh to sync data.'}
+      </Banner>
+    );
+  }
 
-  // Don't show if synced recently or user dismissed
-  if (lastSynced || dismissed) return null;
-
-  return (
-    <Banner
-      visible
-      style={styles.banner}
-      icon={({ size }) => (
-        <MaterialCommunityIcons name="cloud-off-outline" size={size} color="#1a1c1e" />
-      )}
-      actions={[
-        { label: 'Dismiss', onPress: () => setDismissed(true) },
-      ]}
-    >
-      Working offline. Pull to refresh to sync data.
-    </Banner>
-  );
+  return null;
 }
 
 const styles = StyleSheet.create({
-  banner: {
+  syncingBanner: {
+    backgroundColor: '#E3F2FD',
+  },
+  offlineBanner: {
     backgroundColor: '#FFF3E0',
   },
 });

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, View } from 'react-native';
 import { FAB, Searchbar, Menu, IconButton, Text, Portal, Modal, TextInput, Button } from 'react-native-paper';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useAtom, useAtomValue } from 'jotai';
 import * as Crypto from 'expo-crypto';
-import { authStateAtom, itemSortAtom, ItemSortOption } from '../../store/atoms';
+import { authStateAtom, itemSortAtom, ItemSortOption, syncingGroupIdsAtom } from '../../store/atoms';
 import {
   getGroup,
   getGroupItems,
@@ -20,6 +20,7 @@ import type { SnobGroup, RankingItem, RankingItemAttribute, GroupAttribute } fro
 import ItemCard from '../../components/ItemCard';
 import AutocompleteInput from '../../components/AutocompleteInput';
 import EmptyState from '../../components/EmptyState';
+import GroupSyncBanner from '../../components/GroupSyncBanner';
 import { pickImage, takePhoto, uploadImage, UploadedImage } from '../../lib/image-upload';
 import { createItem } from '../../lib/api-client';
 
@@ -43,11 +44,13 @@ export default function GroupDetailScreen() {
   const [attrSuggestions, setAttrSuggestions] = useState<Record<string, string[]>>({});
   const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [hasLoadedLocal, setHasLoadedLocal] = useState(false);
+  const syncingGroupIds = useAtomValue(syncingGroupIdsAtom);
+  const isGroupSyncing = groupId ? syncingGroupIds.includes(groupId) : false;
 
-  const loadData = useCallback(async () => {
+  const loadLocalData = useCallback(async () => {
     if (!groupId || !authState.userId) return;
 
-    // Read from local DB immediately for fast UI
     const [groupData, groupItems, attrs, membership] = await Promise.all([
       getGroup(groupId),
       getGroupItems(groupId, sortBy),
@@ -60,7 +63,6 @@ export default function GroupDetailScreen() {
     setGroupAttributes(attrs);
     setMemberId(membership?.id || null);
 
-    // Load attributes for all items in parallel
     const attrMap: Record<string, RankingItemAttribute[]> = {};
     await Promise.all(
       groupItems.map(async (item) => {
@@ -68,39 +70,53 @@ export default function GroupDetailScreen() {
       })
     );
     setItemAttributesMap(attrMap);
-
-    // Sync from server in background, then refresh local reads
-    syncGroup(groupId)
-      .then(async () => {
-        const [freshGroup, freshItems, freshAttrs] = await Promise.all([
-          getGroup(groupId),
-          getGroupItems(groupId, sortBy),
-          getGroupAttributes(groupId),
-        ]);
-        setGroup(freshGroup);
-        setItems(freshItems);
-        setGroupAttributes(freshAttrs);
-
-        const freshAttrMap: Record<string, RankingItemAttribute[]> = {};
-        await Promise.all(
-          freshItems.map(async (item) => {
-            freshAttrMap[item.id] = await getItemAttributes(item.id);
-          })
-        );
-        setItemAttributesMap(freshAttrMap);
-      })
-      .catch(() => {});
+    setHasLoadedLocal(true);
   }, [groupId, authState.userId, sortBy]);
 
+  const loadData = useCallback(async () => {
+    if (!groupId || !authState.userId) return;
+
+    await loadLocalData();
+
+    try {
+      await syncGroup(groupId);
+      await loadLocalData();
+    } catch {
+      // Offline or sync failed — cached data from loadLocalData remains visible
+    }
+  }, [groupId, authState.userId, loadLocalData]);
+
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    let cancelled = false;
+
+    async function init() {
+      await loadLocalData();
+      if (cancelled || !groupId) return;
+
+      syncGroup(groupId)
+        .then(async () => {
+          if (!cancelled) await loadLocalData();
+        })
+        .catch(() => {});
+    }
+
+    init();
+    return () => {
+      cancelled = true;
+    };
+  }, [groupId, authState.userId, sortBy, loadLocalData]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadData();
-    setRefreshing(false);
+    try {
+      await loadData();
+    } finally {
+      setRefreshing(false);
+    }
   }, [loadData]);
+
+  const showLoadingState = !hasLoadedLocal || (items.length === 0 && isGroupSyncing);
+  const showSyncBanner = hasLoadedLocal && items.length > 0 && isGroupSyncing;
 
   const handleAddItem = useCallback(async () => {
     if (!newItemDescription.trim() || !groupId || !memberId) return;
@@ -204,6 +220,8 @@ export default function GroupDetailScreen() {
       </View>
 
       {/* Item count */}
+      {showSyncBanner && <GroupSyncBanner message="Updating items..." />}
+
       <View style={styles.countRow}>
         <Text variant="bodySmall" style={styles.countText}>
           {searchQuery
@@ -212,7 +230,14 @@ export default function GroupDetailScreen() {
         </Text>
       </View>
 
-      {filteredItems.length === 0 && !searchQuery ? (
+      {showLoadingState ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#1976d2" />
+          <Text variant="bodyMedium" style={styles.loadingText}>
+            Loading items...
+          </Text>
+        </View>
+      ) : filteredItems.length === 0 && !searchQuery ? (
         <EmptyState
           icon="format-list-bulleted"
           title="No Items Yet"
@@ -378,6 +403,15 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   countText: {
+    color: '#546e7a',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
     color: '#546e7a',
   },
   menuContent: {

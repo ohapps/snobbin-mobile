@@ -235,6 +235,37 @@ export async function logout(): Promise<void> {
 }
 
 /**
+ * Reads a value from the local metadata store.
+ */
+export async function getMetadataValue(key: string): Promise<string | null> {
+  const db = await getDb();
+  const row = await db.getFirstAsync<{ value: string }>(
+    'SELECT value FROM app_metadata WHERE key = ?',
+    [key]
+  );
+  return row?.value ?? null;
+}
+
+/**
+ * Writes a value to the local metadata store.
+ */
+export async function setMetadataValue(key: string, value: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(
+    'INSERT OR REPLACE INTO app_metadata (key, value) VALUES (?, ?)',
+    [key, value]
+  );
+}
+
+/**
+ * Removes a value from the local metadata store.
+ */
+export async function deleteMetadataValue(key: string): Promise<void> {
+  const db = await getDb();
+  await db.runAsync('DELETE FROM app_metadata WHERE key = ?', [key]);
+}
+
+/**
  * Returns the stored Auth0 user ID (sub), which maps to snobs.id in the database.
  */
 export async function getAuthUserId(): Promise<string | null> {

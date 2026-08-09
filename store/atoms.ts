@@ -25,3 +25,18 @@ export const appReadyAtom = atom<boolean>(false);
  */
 export type ItemSortOption = 'description' | 'rating' | 'recent';
 export const itemSortAtom = atom<ItemSortOption>('recent');
+
+/**
+ * Global sync status for background data fetching.
+ * - idle: no sync in progress
+ * - syncing: fetching from API
+ * - error: last sync attempt failed (app still works offline with cached data)
+ */
+export type SyncStatus = 'idle' | 'syncing' | 'error';
+export const syncStatusAtom = atom<SyncStatus>('idle');
+
+/** ISO timestamp of the last successful sync, persisted across app restarts. */
+export const lastSyncedAtAtom = atom<Date | null>(null);
+
+/** Group IDs currently being synced from the API. */
+export const syncingGroupIdsAtom = atom<string[]>([]);

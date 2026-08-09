@@ -16,4 +16,5 @@ export {
   getDistinctAttributeValues,
   executeSQL,
 } from './queries';
-export { syncAllUserData, syncGroup, getLastSyncedAt } from './sync';
+export { syncAllUserData, syncGroup } from './sync';
+export { getLastSyncedAt, isGroupSyncing } from '../sync-state';

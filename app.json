@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "snobbin",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
@@ -23,7 +23,10 @@
         "foregroundImage": "./assets/images/icon.png"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.snobbin.mobile"
+      "package": "com.snobbin.mobile",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "output": "static",
@@ -54,7 +57,11 @@
       "typedRoutes": true
     },
     "extra": {
-      "router": {}
-    }
+      "router": {},
+      "eas": {
+        "projectId": "f1a94eda-7a0e-49c9-81a0-4df22ce8b872"
+      }
+    },
+    "owner": "craighausner"
   }
 }
