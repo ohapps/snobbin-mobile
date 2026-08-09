@@ -1,12 +1,13 @@
 import { Stack } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, View, useColorScheme } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { PaperProvider } from 'react-native-paper';
 import { Provider as JotaiProvider, useSetAtom } from 'jotai';
 import { StatusBar } from 'expo-status-bar';
-import { lightTheme, darkTheme } from '../lib/theme';
+import { lightTheme } from '../lib/theme';
 import { getStoredAuth } from '../lib/auth';
 import { initDatabase, syncAllUserData } from '../lib/db';
+import { initSyncState } from '../lib/sync-state';
 import { authStateAtom, appReadyAtom } from '../store/atoms';
 
 function AppInitializer({ children }: { children: React.ReactNode }) {
@@ -21,6 +22,9 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
 
         // Initialize the local SQLite database (creates tables)
         initDatabase();
+
+        // Restore persisted sync timestamp so we don't show "offline" while reconnecting
+        await initSyncState();
 
         // Check stored auth state (from expo-sqlite metadata DB)
         const storedAuth = await getStoredAuth();
@@ -61,14 +65,11 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
 }
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const theme = colorScheme === 'dark' ? darkTheme : lightTheme;
-
   return (
     <JotaiProvider>
-      <PaperProvider theme={theme}>
+      <PaperProvider theme={lightTheme}>
         <AppInitializer>
-          <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+          <StatusBar style="dark" />
           <Stack
             screenOptions={{
               headerStyle: { backgroundColor: '#1976d2' },

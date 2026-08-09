@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { FlatList, RefreshControl, StyleSheet, View } from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, View, ActivityIndicator } from 'react-native';
 import { Text, IconButton } from 'react-native-paper';
 import { Redirect, useRouter } from 'expo-router';
 import { useAtomValue } from 'jotai';
@@ -99,7 +99,8 @@ export default function HomeScreen() {
   if (loading) {
     return (
       <View style={styles.centered}>
-        <Text variant="bodyLarge">Loading groups...</Text>
+        <ActivityIndicator size="large" color="#1976d2" />
+        <Text variant="bodyLarge" style={styles.loadingText}>Loading groups...</Text>
       </View>
     );
   }
@@ -151,6 +152,10 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    gap: 12,
+  },
+  loadingText: {
+    color: '#546e7a',
   },
   list: {
     padding: 16,

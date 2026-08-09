@@ -8,7 +8,8 @@
     "ios": "expo run:ios",
     "ios:build": "npx expo prebuild --platform ios && cd ios && pod install && cd .. && npx expo run:ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "submit:ios": "eas submit --platform ios"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
