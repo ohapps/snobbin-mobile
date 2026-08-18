@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, View, ActivityIndicator } from 'react-native';
-import { Text, IconButton } from 'react-native-paper';
+import { Text } from 'react-native-paper';
 import { Redirect, useRouter } from 'expo-router';
 import { useAtomValue } from 'jotai';
 import { useFocusEffect } from '@react-navigation/native';
@@ -132,13 +132,6 @@ export default function HomeScreen() {
           }
         />
       )}
-      <IconButton
-        icon="account"
-        mode="contained"
-        style={styles.profileButton}
-        onPress={() => router.push('/profile')}
-        accessibilityLabel="View profile"
-      />
     </View>
   );
 }
@@ -159,11 +152,6 @@ const styles = StyleSheet.create({
   },
   list: {
     padding: 16,
-    paddingBottom: 80,
-  },
-  profileButton: {
-    position: 'absolute',
-    bottom: 24,
-    right: 24,
+    paddingBottom: 16,
   },
 });

@@ -1,6 +1,7 @@
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { IconButton } from 'react-native-paper';
 import { PaperProvider } from 'react-native-paper';
 import { Provider as JotaiProvider, useSetAtom } from 'jotai';
 import { StatusBar } from 'expo-status-bar';
@@ -64,6 +65,20 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function ProfileHeaderButton() {
+  const router = useRouter();
+  return (
+    <IconButton
+      icon="account-circle"
+      iconColor="#ffffff"
+      size={26}
+      style={{ margin: 0 }}
+      onPress={() => router.push('/profile')}
+      accessibilityLabel="View profile"
+    />
+  );
+}
+
 export default function RootLayout() {
   return (
     <JotaiProvider>
@@ -77,7 +92,15 @@ export default function RootLayout() {
               headerTitleStyle: { fontWeight: '600' },
             }}
           >
-            <Stack.Screen name="index" options={{ title: 'My Groups' }} />
+            <Stack.Screen
+              name="index"
+              options={{
+                title: 'My Groups',
+                headerRight: () => (
+                  <ProfileHeaderButton />
+                ),
+              }}
+            />
             <Stack.Screen name="login" options={{ headerShown: false }} />
             <Stack.Screen name="profile" options={{ title: 'Profile' }} />
             <Stack.Screen name="group/[groupId]" options={{ title: 'Group' }} />
