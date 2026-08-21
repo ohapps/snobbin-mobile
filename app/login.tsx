@@ -44,11 +44,14 @@ export default function LoginScreen() {
     <View style={styles.container}>
       <Surface style={styles.card} elevation={2}>
         <Image
-          source={require('../assets/images/logo.png')}
-          style={styles.logo}
-          contentFit="contain"
+          source={require('../assets/images/icon.png')}
+          style={styles.appIcon}
+          contentFit="cover"
         />
-        <Text variant="bodyLarge" style={styles.subtitle}>
+        <Text variant="headlineMedium" style={styles.brandTitle}>
+          Snobbin
+        </Text>
+        <Text variant="bodyMedium" style={styles.subtitle}>
           Rate and rank items with your group
         </Text>
 
@@ -65,8 +68,9 @@ export default function LoginScreen() {
           disabled={loading}
           style={styles.button}
           contentStyle={styles.buttonContent}
+          labelStyle={styles.buttonLabel}
         >
-          {loading ? 'Signing in...' : 'Sign in with Auth0'}
+          {loading ? 'Signing in...' : 'Sign In'}
         </Button>
       </Surface>
     </View>
@@ -82,21 +86,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#dfeffa',
   },
   card: {
-    padding: 32,
-    borderRadius: 16,
+    paddingVertical: 36,
+    paddingHorizontal: 28,
+    borderRadius: 24,
     alignItems: 'center',
     width: '100%',
-    maxWidth: 400,
+    maxWidth: 380,
+    backgroundColor: '#ffffff',
   },
-  logo: {
-    width: 200,
-    height: 40,
-    marginBottom: 16,
+  appIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 20,
+    marginBottom: 8,
+  },
+  brandTitle: {
+    fontWeight: '700',
+    color: '#0d47a1',
+    letterSpacing: 0.5,
   },
   subtitle: {
+    marginTop: 6,
     marginBottom: 32,
     textAlign: 'center',
-    color: '#1a1c1e',
+    color: '#546e7a',
   },
   error: {
     color: '#B3261E',
@@ -105,9 +118,15 @@ const styles = StyleSheet.create({
   },
   button: {
     width: '100%',
-    borderRadius: 8,
+    borderRadius: 12,
+    backgroundColor: '#1976d2',
   },
   buttonContent: {
-    paddingVertical: 8,
+    paddingVertical: 6,
+  },
+  buttonLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
 });

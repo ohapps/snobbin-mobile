@@ -1,9 +1,7 @@
-import { getDefaultStore } from 'jotai';
-import { lastSyncedAtAtom, syncStatusAtom, syncingGroupIdsAtom } from '../store/atoms';
+import { lastSyncedAtAtom, syncStatusAtom, syncingGroupIdsAtom, store } from '../store/atoms';
 import { getMetadataValue, setMetadataValue, deleteMetadataValue } from './auth';
 
 const LAST_SYNCED_AT_KEY = 'last_synced_at';
-const store = getDefaultStore();
 
 function getSyncingGroupIds(): string[] {
   return store.get(syncingGroupIdsAtom);

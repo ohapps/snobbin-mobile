@@ -1,5 +1,10 @@
-import { atom } from 'jotai';
+import { atom, getDefaultStore } from 'jotai';
 import type { AuthState } from '../lib/auth';
+
+/**
+ * Shared Jotai store instance used across both React component tree and background services.
+ */
+export const store = getDefaultStore();
 
 /**
  * Global auth state atom — holds the current user's auth info.

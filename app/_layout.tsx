@@ -1,15 +1,15 @@
 import { Stack, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
-import { IconButton } from 'react-native-paper';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { PaperProvider } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Provider as JotaiProvider, useSetAtom } from 'jotai';
 import { StatusBar } from 'expo-status-bar';
 import { lightTheme } from '../lib/theme';
 import { getStoredAuth } from '../lib/auth';
 import { initDatabase, syncAllUserData } from '../lib/db';
 import { initSyncState } from '../lib/sync-state';
-import { authStateAtom, appReadyAtom } from '../store/atoms';
+import { authStateAtom, appReadyAtom, store } from '../store/atoms';
 
 function AppInitializer({ children }: { children: React.ReactNode }) {
   const [isReady, setIsReady] = useState(false);
@@ -68,20 +68,24 @@ function AppInitializer({ children }: { children: React.ReactNode }) {
 function ProfileHeaderButton() {
   const router = useRouter();
   return (
-    <IconButton
-      icon="account-circle"
-      iconColor="#ffffff"
-      size={26}
-      style={{ margin: 0 }}
+    <Pressable
       onPress={() => router.push('/profile')}
       accessibilityLabel="View profile"
-    />
+      accessibilityRole="button"
+      hitSlop={8}
+      style={({ pressed }) => [
+        styles.profileHeaderButton,
+        { opacity: pressed ? 0.6 : 1 },
+      ]}
+    >
+      <MaterialCommunityIcons name="account-circle" size={28} color="#ffffff" />
+    </Pressable>
   );
 }
 
 export default function RootLayout() {
   return (
-    <JotaiProvider>
+    <JotaiProvider store={store}>
       <PaperProvider theme={lightTheme}>
         <AppInitializer>
           <StatusBar style="dark" />
@@ -110,3 +114,12 @@ export default function RootLayout() {
     </JotaiProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  profileHeaderButton: {
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});

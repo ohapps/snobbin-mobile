@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, View, Alert } from 'react-native';
 import { Avatar, Button, Divider, List, Text, Surface } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { useAtom, useAtomValue } from 'jotai';
+import { useFocusEffect } from '@react-navigation/native';
 import { authStateAtom, lastSyncedAtAtom, syncStatusAtom } from '../store/atoms';
 import { logout } from '../lib/auth';
 import { getSnobProfile, clearDatabase } from '../lib/db';
@@ -19,17 +20,24 @@ export default function ProfileScreen() {
   const [loggingOut, setLoggingOut] = useState(false);
   const router = useRouter();
 
-  useEffect(() => {
-    async function load() {
-      if (authState.userId) {
-        const snob = await getSnobProfile(authState.userId);
-        setProfile(snob);
-      }
-      const bytes = await getImageCacheSize();
-      setCacheSize(formatBytes(bytes));
+  const loadData = useCallback(async () => {
+    if (authState.userId) {
+      const snob = await getSnobProfile(authState.userId);
+      setProfile(snob);
     }
-    load();
+    const bytes = await getImageCacheSize();
+    setCacheSize(formatBytes(bytes));
   }, [authState.userId]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
+  useEffect(() => {
+    loadData();
+  }, [loadData, lastSyncedAt]);
 
   const handleLogout = useCallback(async () => {
     Alert.alert('Sign Out', 'Are you sure you want to sign out?', [

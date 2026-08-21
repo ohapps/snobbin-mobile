@@ -4,7 +4,7 @@ import { Text } from 'react-native-paper';
 import { Redirect, useRouter } from 'expo-router';
 import { useAtomValue } from 'jotai';
 import { useFocusEffect } from '@react-navigation/native';
-import { authStateAtom, appReadyAtom } from '../store/atoms';
+import { authStateAtom, appReadyAtom, syncStatusAtom, lastSyncedAtAtom } from '../store/atoms';
 import { getUserGroups, getGroupMemberCount, getGroupItemCount, getSnobProfile, syncAllUserData } from '../lib/db';
 import type { SnobGroup } from '../types/models';
 import GroupCard from '../components/GroupCard';
@@ -19,16 +19,13 @@ interface GroupWithCounts extends SnobGroup {
 export default function HomeScreen() {
   const authState = useAtomValue(authStateAtom);
   const appReady = useAtomValue(appReadyAtom);
+  const syncStatus = useAtomValue(syncStatusAtom);
+  const lastSyncedAt = useAtomValue(lastSyncedAtAtom);
   const router = useRouter();
   const [groups, setGroups] = useState<GroupWithCounts[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const hasAutoNavigated = useRef(false);
-
-  // Redirect to login if not authenticated (once app initialization is done)
-  if (appReady && !authState.isLoggedIn) {
-    return <Redirect href="/login" />;
-  }
 
   const loadGroups = useCallback(async () => {
     if (!authState.userId) {
@@ -78,9 +75,10 @@ export default function HomeScreen() {
     }, [loadGroups])
   );
 
+  // Reload data on mount or when sync state updates
   useEffect(() => {
     loadGroups();
-  }, [loadGroups]);
+  }, [loadGroups, syncStatus, lastSyncedAt]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -96,11 +94,22 @@ export default function HomeScreen() {
     }
   }, [authState.userId, loadGroups]);
 
-  if (loading) {
+  // Redirect to login if not authenticated (once app initialization is done)
+  if (appReady && !authState.isLoggedIn) {
+    return <Redirect href="/login" />;
+  }
+
+  const isInitialSync = groups.length === 0 && syncStatus === 'syncing';
+
+  if (loading || isInitialSync) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#1976d2" />
-        <Text variant="bodyLarge" style={styles.loadingText}>Loading groups...</Text>
+      <View style={styles.container}>
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color="#1976d2" />
+          <Text variant="bodyLarge" style={styles.loadingText}>
+            {isInitialSync ? 'Syncing your groups...' : 'Loading groups...'}
+          </Text>
+        </View>
       </View>
     );
   }
@@ -108,30 +117,29 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <SyncStatus />
-      {groups.length === 0 ? (
-        <EmptyState
-          icon="account-group"
-          title="No Groups Yet"
-          message="Join or create a group on the web app to get started ranking items with friends."
-        />
-      ) : (
-        <FlatList
-          data={groups}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <GroupCard
-              group={item}
-              memberCount={item.memberCount}
-              itemCount={item.itemCount}
-              onPress={() => router.push(`/group/${item.id}`)}
-            />
-          )}
-          contentContainerStyle={styles.list}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-          }
-        />
-      )}
+      <FlatList
+        data={groups}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }) => (
+          <GroupCard
+            group={item}
+            memberCount={item.memberCount}
+            itemCount={item.itemCount}
+            onPress={() => router.push(`/group/${item.id}`)}
+          />
+        )}
+        ListEmptyComponent={
+          <EmptyState
+            icon="account-group"
+            title="No Groups Yet"
+            message="Join or create a group on the web app to get started ranking items with friends."
+          />
+        }
+        contentContainerStyle={groups.length === 0 ? styles.emptyList : styles.list}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
+      />
     </View>
   );
 }
@@ -153,5 +161,9 @@ const styles = StyleSheet.create({
   list: {
     padding: 16,
     paddingBottom: 16,
+  },
+  emptyList: {
+    flexGrow: 1,
+    padding: 16,
   },
 });

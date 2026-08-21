@@ -112,9 +112,9 @@ npx expo run:android
 
 ### Not in v1 (web-only)
 
+- AI item identification
 - Group creation and settings
 - Member invites and management
-- AI item identification
 - Group admin actions (beyond delete)
 
 ## Project Structure
