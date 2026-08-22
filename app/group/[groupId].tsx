@@ -14,6 +14,7 @@ import {
   getUserMembership,
   getDistinctAttributeValues,
   executeSQL,
+  getSnobProfile,
   syncGroup,
 } from '../../lib/db';
 import type { SnobGroup, RankingItem, RankingItemAttribute, GroupAttribute } from '../../types/models';
@@ -22,7 +23,7 @@ import AutocompleteInput from '../../components/AutocompleteInput';
 import EmptyState from '../../components/EmptyState';
 import GroupSyncBanner from '../../components/GroupSyncBanner';
 import { pickImage, takePhoto, uploadImage, UploadedImage } from '../../lib/image-upload';
-import { createItem } from '../../lib/api-client';
+import { createItem, identifyItem } from '../../lib/api-client';
 
 export default function GroupDetailScreen() {
   const { groupId } = useLocalSearchParams<{ groupId: string }>();
@@ -44,6 +45,8 @@ export default function GroupDetailScreen() {
   const [attrSuggestions, setAttrSuggestions] = useState<Record<string, string[]>>({});
   const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [isPremiumUser, setIsPremiumUser] = useState(false);
+  const [isIdentifying, setIsIdentifying] = useState(false);
   const [hasLoadedLocal, setHasLoadedLocal] = useState(false);
   const syncingGroupIds = useAtomValue(syncingGroupIdsAtom);
   const isGroupSyncing = groupId ? syncingGroupIds.includes(groupId) : false;
@@ -62,6 +65,9 @@ export default function GroupDetailScreen() {
     setItems(groupItems);
     setGroupAttributes(attrs);
     setMemberId(membership?.id || null);
+
+    const snobProfile = await getSnobProfile(authState.userId);
+    setIsPremiumUser(snobProfile?.isPremium ?? false);
 
     const attrMap: Record<string, RankingItemAttribute[]> = {};
     await Promise.all(
@@ -160,6 +166,39 @@ export default function GroupDetailScreen() {
       setSaving(false);
     }
   }, [newItemDescription, newItemAttributes, selectedImageUri, groupId, memberId, loadData]);
+
+  const handleIdentifyWithAI = useCallback(async () => {
+    if (!selectedImageUri || !group) return;
+
+    setIsIdentifying(true);
+    try {
+      // Upload image first to get a URL the backend can access
+      const uploaded = await uploadImage(selectedImageUri);
+
+      const result = await identifyItem({
+        imageUrl: uploaded.url,
+        groupName: group.name,
+        groupDescription: group.description,
+        attributes: groupAttributes.map((attr) => ({
+          id: attr.id,
+          name: attr.name,
+          existingValues: attrSuggestions[attr.id] || [],
+        })),
+      });
+
+      // Auto-fill form fields from AI response
+      setNewItemDescription(result.description);
+      const attrMap: Record<string, string> = {};
+      for (const attr of result.attributes) {
+        attrMap[attr.id] = attr.value;
+      }
+      setNewItemAttributes(attrMap);
+    } catch (err) {
+      console.error('AI identification failed:', err);
+    } finally {
+      setIsIdentifying(false);
+    }
+  }, [selectedImageUri, group, groupAttributes, attrSuggestions]);
 
   // Filter items by search query
   const filteredItems = items.filter((item) => {
@@ -301,6 +340,7 @@ export default function GroupDetailScreen() {
             value={newItemDescription}
             onChangeText={setNewItemDescription}
             mode="outlined"
+            multiline
             style={styles.input}
           />
 
@@ -358,6 +398,20 @@ export default function GroupDetailScreen() {
               </>
             )}
           </View>
+
+          {/* AI Identification — premium only */}
+          {isPremiumUser && selectedImageUri && (
+            <Button
+              mode="outlined"
+              icon="auto-fix"
+              onPress={handleIdentifyWithAI}
+              loading={isIdentifying}
+              disabled={isIdentifying}
+              style={styles.identifyButton}
+            >
+              Identify with AI
+            </Button>
+          )}
 
           <View style={styles.modalActions}>
             <Button mode="text" onPress={() => setAddItemVisible(false)}>
@@ -465,6 +519,9 @@ const styles = StyleSheet.create({
   },
   imageButton: {
     flex: 1,
+  },
+  identifyButton: {
+    marginBottom: 12,
   },
   modalActions: {
     flexDirection: 'row',

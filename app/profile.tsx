@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View, Alert } from 'react-native';
-import { Avatar, Button, Divider, List, Text, Surface } from 'react-native-paper';
+import { Avatar, Button, Chip, Divider, List, Text, Surface } from 'react-native-paper';
 import { useRouter } from 'expo-router';
 import { useAtom, useAtomValue } from 'jotai';
 import { useFocusEffect } from '@react-navigation/native';
@@ -101,6 +101,16 @@ export default function ProfileScreen() {
             <Text variant="bodyMedium" style={styles.email}>
               {email}
             </Text>
+            {profile?.isPremium && (
+              <Chip
+                icon="star"
+                compact
+                style={styles.premiumBadge}
+                textStyle={styles.premiumBadgeText}
+              >
+                Premium
+              </Chip>
+            )}
           </View>
         </View>
       </Surface>
@@ -210,6 +220,15 @@ const styles = StyleSheet.create({
   email: {
     color: '#1a1c1e',
     marginTop: 4,
+  },
+  premiumBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    backgroundColor: '#fff3e0',
+  },
+  premiumBadgeText: {
+    color: '#e65100',
+    fontSize: 12,
   },
   section: {
     borderRadius: 12,
