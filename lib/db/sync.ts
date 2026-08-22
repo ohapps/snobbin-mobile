@@ -62,6 +62,7 @@ interface UserGroupsResponse {
     last_name: string | null;
     picture_url: string | null;
     last_group_id: string | null;
+    is_premium?: number | null;
   }>;
 }
 
@@ -91,6 +92,7 @@ interface GroupDetailResponse {
     last_name: string | null;
     picture_url: string | null;
     last_group_id: string | null;
+    is_premium?: number | null;
   }>;
   attributes: Array<{
     id: string;
@@ -162,9 +164,9 @@ export async function syncAllUserData(userId: string): Promise<void> {
       // Upsert snobs
       for (const s of data.snobs) {
         db.runSync(
-          `INSERT OR REPLACE INTO snobs (id, email, first_name, last_name, picture_url, last_group_id)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [s.id, s.email, s.first_name, s.last_name, s.picture_url, s.last_group_id]
+          `INSERT OR REPLACE INTO snobs (id, email, first_name, last_name, picture_url, last_group_id, is_premium)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [s.id, s.email, s.first_name, s.last_name, s.picture_url, s.last_group_id, s.is_premium ?? 0]
         );
       }
 
@@ -220,9 +222,9 @@ export async function syncGroup(groupId: string): Promise<void> {
       // Upsert snobs
       for (const s of data.snobs) {
         db.runSync(
-          `INSERT OR REPLACE INTO snobs (id, email, first_name, last_name, picture_url, last_group_id)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [s.id, s.email, s.first_name, s.last_name, s.picture_url, s.last_group_id]
+          `INSERT OR REPLACE INTO snobs (id, email, first_name, last_name, picture_url, last_group_id, is_premium)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [s.id, s.email, s.first_name, s.last_name, s.picture_url, s.last_group_id, s.is_premium ?? 0]
         );
       }
 
