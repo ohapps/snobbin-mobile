@@ -136,3 +136,25 @@ export async function saveRanking(payload: SaveRankingPayload): Promise<{ id: st
 export async function deleteItem(itemId: string): Promise<void> {
   return apiDelete(`/api/mobile/items/${itemId}`);
 }
+
+// ─── AI Identification ───────────────────────────────────────────────────────
+
+export interface IdentifyItemPayload {
+  imageUrl: string;
+  groupName: string;
+  groupDescription: string;
+  attributes: Array<{ id: string; name: string; existingValues: string[] }>;
+}
+
+export interface IdentifyItemResult {
+  description: string;
+  attributes: Array<{ id: string; value: string }>;
+}
+
+/**
+ * Calls the AI item detection endpoint with an image URL and group context.
+ * Only works for premium users — returns 403 otherwise.
+ */
+export async function identifyItem(payload: IdentifyItemPayload): Promise<IdentifyItemResult> {
+  return apiPost('/api/identify-item', payload);
+}

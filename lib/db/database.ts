@@ -26,7 +26,8 @@ const CREATE_TABLES_SQL = `
     first_name TEXT,
     last_name TEXT,
     picture_url TEXT,
-    last_group_id TEXT
+    last_group_id TEXT,
+    is_premium INTEGER DEFAULT 0
   );
 
   CREATE TABLE IF NOT EXISTS snob_group_members (
@@ -106,6 +107,11 @@ const DROP_TABLES_SQL = `
  */
 export function initDatabase(): void {
   db.execSync(CREATE_TABLES_SQL);
+  try {
+    db.execSync('ALTER TABLE snobs ADD COLUMN is_premium INTEGER DEFAULT 0;');
+  } catch {
+    // Column already exists
+  }
   console.log('[DB] Database initialized');
 }
 

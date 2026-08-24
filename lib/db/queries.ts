@@ -102,10 +102,12 @@ export async function getGroupMembers(groupId: string): Promise<(GroupMember & {
     s_first_name: string | null;
     s_last_name: string | null;
     s_picture_url: string | null;
+    s_is_premium: number | null;
   }>(
     `SELECT m.id, m.group_id, m.snob_id, m.role,
             s.email as s_email, s.first_name as s_first_name,
-            s.last_name as s_last_name, s.picture_url as s_picture_url
+            s.last_name as s_last_name, s.picture_url as s_picture_url,
+            s.is_premium as s_is_premium
      FROM snob_group_members m
      LEFT JOIN snobs s ON s.id = m.snob_id
      WHERE m.group_id = ? AND m.role != 'DISABLED'
@@ -125,6 +127,7 @@ export async function getGroupMembers(groupId: string): Promise<(GroupMember & {
       lastName: row.s_last_name || '',
       pictureUrl: row.s_picture_url || null,
       lastGroupId: null,
+      isPremium: row.s_is_premium === 1,
     },
   }));
 }
@@ -345,6 +348,7 @@ export async function getSnobProfile(userId: string): Promise<Snob | null> {
     last_name: string | null;
     picture_url: string | null;
     last_group_id: string | null;
+    is_premium: number | null;
   }>('SELECT * FROM snobs WHERE id = ?', [userId]);
 
   if (!row) return null;
@@ -356,6 +360,7 @@ export async function getSnobProfile(userId: string): Promise<Snob | null> {
     lastName: row.last_name || '',
     pictureUrl: row.picture_url || null,
     lastGroupId: row.last_group_id || null,
+    isPremium: row.is_premium === 1,
   };
 }
 

@@ -23,6 +23,7 @@ export interface Snob {
   lastName: string;
   pictureUrl: string | null;
   lastGroupId: string | null;
+  isPremium: boolean;
 }
 
 export interface GroupMember {
