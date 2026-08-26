@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { FAB, Searchbar, Menu, IconButton, Text, Portal, Modal, TextInput, Button } from 'react-native-paper';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
@@ -13,6 +13,7 @@ import {
   getGroupAttributes,
   getUserMembership,
   getDistinctAttributeValues,
+  getAttributeSummary,
   executeSQL,
   getSnobProfile,
   syncGroup,
@@ -36,6 +37,7 @@ export default function GroupDetailScreen() {
   const [itemAttributesMap, setItemAttributesMap] = useState<Record<string, RankingItemAttribute[]>>({});
   const [groupAttributes, setGroupAttributes] = useState<GroupAttribute[]>([]);
   const [memberId, setMemberId] = useState<string | null>(null);
+  const [memberRole, setMemberRole] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [sortMenuVisible, setSortMenuVisible] = useState(false);
@@ -48,6 +50,8 @@ export default function GroupDetailScreen() {
   const [isPremiumUser, setIsPremiumUser] = useState(false);
   const [isIdentifying, setIsIdentifying] = useState(false);
   const [hasLoadedLocal, setHasLoadedLocal] = useState(false);
+  const [topRankingsVisible, setTopRankingsVisible] = useState(false);
+  const [attributeSummary, setAttributeSummary] = useState<{ attributeId: string; attributeName: string; attributeValue: string; count: number }[]>([]);
   const syncingGroupIds = useAtomValue(syncingGroupIdsAtom);
   const isGroupSyncing = groupId ? syncingGroupIds.includes(groupId) : false;
 
@@ -65,6 +69,7 @@ export default function GroupDetailScreen() {
     setItems(groupItems);
     setGroupAttributes(attrs);
     setMemberId(membership?.id || null);
+    setMemberRole(membership?.role || null);
 
     const snobProfile = await getSnobProfile(authState.userId);
     setIsPremiumUser(snobProfile?.isPremium ?? false);
@@ -209,6 +214,23 @@ export default function GroupDetailScreen() {
     return attrs.some((a) => a.attributeValue.toLowerCase().includes(query));
   });
 
+  const handleOpenTopRankings = useCallback(async () => {
+    if (!groupId) return;
+    const summary = await getAttributeSummary(groupId);
+    setAttributeSummary(summary);
+    setTopRankingsVisible(true);
+  }, [groupId]);
+
+  // Group attribute summary by attribute name for display
+  const groupedAttributes = attributeSummary.reduce<Record<string, { attributeValue: string; count: number }[]>>(
+    (acc, item) => {
+      if (!acc[item.attributeName]) acc[item.attributeName] = [];
+      acc[item.attributeName].push({ attributeValue: item.attributeValue, count: item.count });
+      return acc;
+    },
+    {}
+  );
+
   const sortLabel: Record<ItemSortOption, string> = {
     description: 'Description',
     rating: 'Rating',
@@ -217,7 +239,31 @@ export default function GroupDetailScreen() {
 
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ title: group?.name || 'Group' }} />
+      <Stack.Screen
+        options={{
+          title: group?.name || 'Group',
+          headerRight: () => (
+            <View style={{ flexDirection: 'row' }}>
+              <IconButton
+                icon="account-group"
+                iconColor="#ffffff"
+                size={22}
+                onPress={() => router.push(`/group/${groupId}/members`)}
+                accessibilityLabel="View members"
+              />
+              {memberRole === 'ADMIN' && (
+                <IconButton
+                  icon="pencil"
+                  iconColor="#ffffff"
+                  size={22}
+                  onPress={() => router.push(`/group/form?groupId=${groupId}`)}
+                  accessibilityLabel="Edit group"
+                />
+              )}
+            </View>
+          ),
+        }}
+      />
 
       {/* Search and Sort Row */}
       <View style={styles.toolbar}>
@@ -267,6 +313,13 @@ export default function GroupDetailScreen() {
             ? `${filteredItems.length} of ${items.length} items`
             : `${items.length} items`}
         </Text>
+        {groupAttributes.length > 0 && (
+          <Pressable onPress={handleOpenTopRankings} accessibilityRole="button" accessibilityLabel="View top rankings by attribute">
+            <Text variant="bodySmall" style={styles.topRankingsLink}>
+              Top Rankings
+            </Text>
+          </Pressable>
+        )}
       </View>
 
       {showLoadingState ? (
@@ -428,6 +481,42 @@ export default function GroupDetailScreen() {
           </View>
         </Modal>
       </Portal>
+
+      {/* Top Rankings Modal */}
+      <Portal>
+        <Modal
+          visible={topRankingsVisible}
+          onDismiss={() => setTopRankingsVisible(false)}
+          contentContainerStyle={styles.topRankingsModal}
+        >
+          <Text variant="titleLarge" style={styles.modalTitle}>
+            Top Rankings By Attribute
+          </Text>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {Object.keys(groupedAttributes).length === 0 ? (
+              <Text variant="bodyMedium" style={styles.emptyAttrText}>
+                No attribute data yet. Add items with attributes to see rankings here.
+              </Text>
+            ) : (
+              Object.entries(groupedAttributes).map(([attrName, values]) => (
+                <View key={attrName} style={styles.attrSection}>
+                  <Text variant="titleSmall" style={styles.attrTitle}>
+                    {attrName}
+                  </Text>
+                  {values.slice(0, 10).map((val, index) => (
+                    <Text key={val.attributeValue} variant="bodyMedium" style={styles.attrValue}>
+                      <Text style={styles.attrRank}>{index + 1}.</Text> {val.attributeValue} ({val.count} {val.count === 1 ? 'item' : 'items'})
+                    </Text>
+                  ))}
+                </View>
+              ))
+            )}
+          </ScrollView>
+          <Button mode="text" onPress={() => setTopRankingsVisible(false)} style={styles.closeButton}>
+            Close
+          </Button>
+        </Modal>
+      </Portal>
     </View>
   );
 }
@@ -453,6 +542,9 @@ const styles = StyleSheet.create({
     minHeight: 0,
   },
   countRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 16,
     paddingVertical: 6,
   },
@@ -528,5 +620,39 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: 8,
     marginTop: 8,
+  },
+  topRankingsLink: {
+    color: '#1565c0',
+    fontWeight: '500',
+  },
+  topRankingsModal: {
+    backgroundColor: '#dfeffa',
+    margin: 24,
+    padding: 24,
+    borderRadius: 16,
+  },
+  attrSection: {
+    marginBottom: 16,
+  },
+  attrTitle: {
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  attrValue: {
+    color: '#37474f',
+    paddingLeft: 8,
+    paddingVertical: 2,
+  },
+  attrRank: {
+    fontWeight: '700',
+  },
+  emptyAttrText: {
+    color: '#546e7a',
+    textAlign: 'center',
+    marginTop: 16,
+  },
+  closeButton: {
+    marginTop: 8,
+    alignSelf: 'flex-end',
   },
 });

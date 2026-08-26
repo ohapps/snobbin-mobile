@@ -158,3 +158,138 @@ export interface IdentifyItemResult {
 export async function identifyItem(payload: IdentifyItemPayload): Promise<IdentifyItemResult> {
   return apiPost('/api/identify-item', payload);
 }
+
+// ─── Group Operations ─────────────────────────────────────────────────────────
+
+export interface SaveGroupPayload {
+  name: string;
+  description: string;
+  minRanking: number;
+  maxRanking: number;
+  increments: number;
+  rankIcon: string;
+  rankingsRequired: number;
+  pictureUrl?: string | null;
+  attributes: Array<{ id?: string; name: string }>;
+}
+
+export async function createGroup(payload: SaveGroupPayload): Promise<{ id: string }> {
+  return apiPost('/api/mobile/groups', payload);
+}
+
+export async function updateGroup(groupId: string, payload: SaveGroupPayload): Promise<{ id: string }> {
+  return apiPut(`/api/mobile/groups/${groupId}/edit`, payload);
+}
+
+/**
+ * Soft-deletes a group on the backend.
+ * Only ADMIN members of the group can delete it.
+ */
+export async function deleteGroup(groupId: string): Promise<void> {
+  return apiDelete(`/api/mobile/groups/${groupId}`);
+}
+
+// ─── Invite Operations ────────────────────────────────────────────────────────
+
+export interface GroupInvite {
+  id: string;
+  email: string;
+  status: string;
+}
+
+export interface PendingInvite {
+  id: string;
+  groupId: string;
+  groupName: string;
+  groupDescription: string | null;
+  groupPictureUrl: string | null;
+}
+
+/**
+ * Creates a pending invite for the given email.
+ */
+export async function createInvite(groupId: string, email: string): Promise<GroupInvite> {
+  return apiPost(`/api/mobile/groups/${groupId}/invites`, { email });
+}
+
+/**
+ * Fetches pending invites for a group.
+ */
+export async function getGroupInvites(groupId: string): Promise<{ invites: GroupInvite[] }> {
+  const token = await refreshAccessToken();
+  if (!token) {
+    throw new Error('Not authenticated — please sign in again');
+  }
+
+  const url = `${getBackendUrl()}/api/mobile/groups/${groupId}/invites`;
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`API request failed (${response.status}): ${text}`);
+  }
+
+  return response.json() as Promise<{ invites: GroupInvite[] }>;
+}
+
+/**
+ * Fetches the current user's pending invites across all groups.
+ */
+export async function getMyInvites(): Promise<{ invites: PendingInvite[] }> {
+  const token = await refreshAccessToken();
+  if (!token) {
+    throw new Error('Not authenticated — please sign in again');
+  }
+
+  const url = `${getBackendUrl()}/api/mobile/invites`;
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`API request failed (${response.status}): ${text}`);
+  }
+
+  return response.json() as Promise<{ invites: PendingInvite[] }>;
+}
+
+/**
+ * Accepts a pending invite. Returns the groupId of the accepted group.
+ */
+export async function acceptInvite(inviteId: string): Promise<{ groupId: string }> {
+  return apiPost(`/api/mobile/invites/${inviteId}/accept`, {});
+}
+
+/**
+ * Declines a pending invite.
+ */
+export async function declineInvite(inviteId: string): Promise<void> {
+  return apiPost(`/api/mobile/invites/${inviteId}/decline`, {});
+}
+
+// ─── Member Management ───────────────────────────────────────────────────────
+
+export type MemberRoleAction = 'ADMIN' | 'MEMBER' | 'DISABLED';
+
+/**
+ * Updates a group member's role.
+ * Only ADMIN users can call this. Cannot modify other admins or yourself.
+ *
+ * Transitions: MEMBER → ADMIN, MEMBER → DISABLED, DISABLED → MEMBER
+ */
+export async function updateMemberRole(
+  groupId: string,
+  memberId: string,
+  role: MemberRoleAction,
+): Promise<{ success: boolean; memberId: string; role: string }> {
+  return apiPut(`/api/mobile/groups/${groupId}/members/${memberId}/role`, { role });
+}
