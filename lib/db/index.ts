@@ -14,6 +14,7 @@ export {
   getUserRankingForItem,
   getSnobProfile,
   getDistinctAttributeValues,
+  getAttributeSummary,
   executeSQL,
 } from './queries';
 export { syncAllUserData, syncGroup } from './sync';

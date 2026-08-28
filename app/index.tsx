@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, RefreshControl, StyleSheet, View, ActivityIndicator } from 'react-native';
-import { Text } from 'react-native-paper';
+import { FAB, Text } from 'react-native-paper';
 import { Redirect, useRouter } from 'expo-router';
 import { useAtomValue } from 'jotai';
 import { useFocusEffect } from '@react-navigation/native';
 import { authStateAtom, appReadyAtom, syncStatusAtom, lastSyncedAtAtom } from '../store/atoms';
 import { getUserGroups, getGroupMemberCount, getGroupItemCount, getSnobProfile, syncAllUserData } from '../lib/db';
+import { getMyInvites, acceptInvite, declineInvite, PendingInvite } from '../lib/api-client';
 import type { SnobGroup } from '../types/models';
 import GroupCard from '../components/GroupCard';
+import InviteCard from '../components/InviteCard';
 import SyncStatus from '../components/SyncStatus';
 import EmptyState from '../components/EmptyState';
 
@@ -23,6 +25,8 @@ export default function HomeScreen() {
   const lastSyncedAt = useAtomValue(lastSyncedAtAtom);
   const router = useRouter();
   const [groups, setGroups] = useState<GroupWithCounts[]>([]);
+  const [invites, setInvites] = useState<PendingInvite[]>([]);
+  const [processingInvite, setProcessingInvite] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
   const hasAutoNavigated = useRef(false);
@@ -36,18 +40,22 @@ export default function HomeScreen() {
     try {
       const userGroups = await getUserGroups(authState.userId);
 
-      // Fetch counts for each group in parallel
-      const groupsWithCounts = await Promise.all(
-        userGroups.map(async (group) => {
-          const [memberCount, itemCount] = await Promise.all([
-            getGroupMemberCount(group.id),
-            getGroupItemCount(group.id),
-          ]);
-          return { ...group, memberCount, itemCount };
-        })
-      );
+      // Fetch counts and invites in parallel
+      const [groupsWithCounts, inviteData] = await Promise.all([
+        Promise.all(
+          userGroups.map(async (group) => {
+            const [memberCount, itemCount] = await Promise.all([
+              getGroupMemberCount(group.id),
+              getGroupItemCount(group.id),
+            ]);
+            return { ...group, memberCount, itemCount };
+          })
+        ),
+        getMyInvites().catch(() => ({ invites: [] })),
+      ]);
 
       setGroups(groupsWithCounts);
+      setInvites(inviteData.invites);
 
       // Auto-navigate to lastGroupId on first load only
       if (!hasAutoNavigated.current && groupsWithCounts.length > 0) {
@@ -94,6 +102,38 @@ export default function HomeScreen() {
     }
   }, [authState.userId, loadGroups]);
 
+  const handleAcceptInvite = useCallback(async (inviteId: string) => {
+    setProcessingInvite(inviteId);
+    try {
+      const result = await acceptInvite(inviteId);
+      // Remove the invite from the list
+      setInvites((prev) => prev.filter((i) => i.id !== inviteId));
+      // Sync to pull the new group into local DB
+      if (authState.userId) {
+        await syncAllUserData(authState.userId);
+        await loadGroups();
+      }
+      // Navigate to the new group
+      router.push(`/group/${result.groupId}`);
+    } catch (err) {
+      console.error('[HomeScreen] Accept invite failed:', err);
+    } finally {
+      setProcessingInvite(null);
+    }
+  }, [authState.userId, loadGroups, router]);
+
+  const handleDeclineInvite = useCallback(async (inviteId: string) => {
+    setProcessingInvite(inviteId);
+    try {
+      await declineInvite(inviteId);
+      setInvites((prev) => prev.filter((i) => i.id !== inviteId));
+    } catch (err) {
+      console.error('[HomeScreen] Decline invite failed:', err);
+    } finally {
+      setProcessingInvite(null);
+    }
+  }, []);
+
   // Redirect to login if not authenticated (once app initialization is done)
   if (appReady && !authState.isLoggedIn) {
     return <Redirect href="/login" />;
@@ -128,17 +168,45 @@ export default function HomeScreen() {
             onPress={() => router.push(`/group/${item.id}`)}
           />
         )}
-        ListEmptyComponent={
-          <EmptyState
-            icon="account-group"
-            title="No Groups Yet"
-            message="Join or create a group on the web app to get started ranking items with friends."
-          />
+        ListHeaderComponent={
+          invites.length > 0 ? (
+            <View style={styles.invitesSection}>
+              <Text variant="titleSmall" style={styles.invitesTitle}>
+                Pending Invites
+              </Text>
+              {invites.map((invite) => (
+                <InviteCard
+                  key={invite.id}
+                  invite={invite}
+                  onAccept={() => handleAcceptInvite(invite.id)}
+                  onDecline={() => handleDeclineInvite(invite.id)}
+                  accepting={processingInvite === invite.id}
+                  declining={processingInvite === invite.id}
+                />
+              ))}
+            </View>
+          ) : null
         }
-        contentContainerStyle={groups.length === 0 ? styles.emptyList : styles.list}
+        ListEmptyComponent={
+          invites.length === 0 ? (
+            <EmptyState
+              icon="account-group"
+              title="No Groups Yet"
+              message="Tap the + button to create a group, or join one from the web app."
+            />
+          ) : null
+        }
+        contentContainerStyle={groups.length === 0 && invites.length === 0 ? styles.emptyList : styles.list}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
+      />
+      <FAB
+        icon="plus"
+        style={styles.fab}
+        color="#ffffff"
+        onPress={() => router.push('/group/form')}
+        accessibilityLabel="Create new group"
       />
     </View>
   );
@@ -165,5 +233,20 @@ const styles = StyleSheet.create({
   emptyList: {
     flexGrow: 1,
     padding: 16,
+  },
+  invitesSection: {
+    marginBottom: 16,
+  },
+  invitesTitle: {
+    color: '#1976d2',
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    backgroundColor: '#1565c0',
+    borderRadius: 28,
   },
 });

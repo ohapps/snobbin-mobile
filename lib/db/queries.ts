@@ -110,8 +110,10 @@ export async function getGroupMembers(groupId: string): Promise<(GroupMember & {
             s.is_premium as s_is_premium
      FROM snob_group_members m
      LEFT JOIN snobs s ON s.id = m.snob_id
-     WHERE m.group_id = ? AND m.role != 'DISABLED'
-     ORDER BY s.first_name`,
+     WHERE m.group_id = ?
+     ORDER BY
+       CASE m.role WHEN 'ADMIN' THEN 0 WHEN 'MEMBER' THEN 1 ELSE 2 END,
+       s.first_name`,
     [groupId]
   );
 
@@ -432,6 +434,39 @@ function mapItem(row: {
 }
 
 // ─── Attribute Autocomplete ──────────────────────────────────────────────────
+
+/**
+ * Gets the top attribute values for a group, grouped by attribute.
+ * Used for the "Top Rankings By Attribute" summary view.
+ * Returns the most common attribute values ranked by item count.
+ */
+export async function getAttributeSummary(
+  groupId: string
+): Promise<{ attributeId: string; attributeName: string; attributeValue: string; count: number }[]> {
+  const rows = db.getAllSync<{
+    attribute_id: string;
+    attribute_name: string;
+    attribute_value: string;
+    count: number;
+  }>(
+    `SELECT ria.attribute_id, a.name as attribute_name, ria.attribute_value,
+            COUNT(ria.id) as count
+     FROM ranking_items ri
+     INNER JOIN ranking_item_attributes ria ON ri.id = ria.item_id
+     INNER JOIN snob_group_attributes a ON a.id = ria.attribute_id
+     WHERE ri.group_id = ? AND ria.attribute_value != ''
+     GROUP BY ria.attribute_id, ria.attribute_value
+     ORDER BY a.name, count DESC`,
+    [groupId]
+  );
+
+  return rows.map((r) => ({
+    attributeId: r.attribute_id,
+    attributeName: r.attribute_name,
+    attributeValue: r.attribute_value,
+    count: r.count,
+  }));
+}
 
 /**
  * Gets all distinct values for a specific attribute within a group.

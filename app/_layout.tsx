@@ -108,6 +108,8 @@ export default function RootLayout() {
             <Stack.Screen name="login" options={{ headerShown: false }} />
             <Stack.Screen name="profile" options={{ title: 'Profile' }} />
             <Stack.Screen name="group/[groupId]" options={{ title: 'Group' }} />
+            <Stack.Screen name="group/[groupId]/members" options={{ title: 'Members' }} />
+            <Stack.Screen name="group/form" options={{ title: 'Group' }} />
           </Stack>
         </AppInitializer>
       </PaperProvider>

@@ -109,13 +109,14 @@ npx expo run:android
 - ✅ Sync status indicator
 - ✅ Pull-to-refresh
 - ✅ Profile with cache management
-
-### Not in v1 (web-only)
-
-- AI item identification
-- Group creation and settings
-- Member invites and management
-- Group admin actions (beyond delete)
+- ✅ AI item identification
+- ✅ Group creation and settings
+- ✅ Member invites and management
+- ✅ Group admin actions (beyond delete)
+- ✅ Group details
+- Bugs
+   - fix mobile search
+   - fix loading screen on every group load 
 
 ## Project Structure
 
