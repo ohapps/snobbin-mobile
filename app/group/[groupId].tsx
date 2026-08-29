@@ -1,20 +1,19 @@
-import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, FlatList, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { FAB, Searchbar, Menu, IconButton, Text, Portal, Modal, TextInput, Button } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useAtom, useAtomValue } from 'jotai';
-import * as Crypto from 'expo-crypto';
 import { authStateAtom, itemSortAtom, ItemSortOption, syncingGroupIdsAtom } from '../../store/atoms';
 import {
   getGroup,
   getGroupItems,
-  getItemAttributes,
+  getGroupItemAttributes,
   getGroupAttributes,
   getUserMembership,
   getDistinctAttributeValues,
-  getAttributeSummary,
-  executeSQL,
+  getAttributeSummary,  
   getSnobProfile,
   syncGroup,
 } from '../../lib/db';
@@ -22,8 +21,7 @@ import type { SnobGroup, RankingItem, RankingItemAttribute, GroupAttribute } fro
 import ItemCard from '../../components/ItemCard';
 import AutocompleteInput from '../../components/AutocompleteInput';
 import EmptyState from '../../components/EmptyState';
-import GroupSyncBanner from '../../components/GroupSyncBanner';
-import { pickImage, takePhoto, uploadImage, UploadedImage } from '../../lib/image-upload';
+import { pickImage, takePhoto, uploadImage } from '../../lib/image-upload';
 import { createItem, identifyItem } from '../../lib/api-client';
 
 export default function GroupDetailScreen() {
@@ -39,8 +37,10 @@ export default function GroupDetailScreen() {
   const [memberId, setMemberId] = useState<string | null>(null);
   const [memberRole, setMemberRole] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [sortMenuVisible, setSortMenuVisible] = useState(false);
+  const [groupMenuVisible, setGroupMenuVisible] = useState(false);
   const [addItemVisible, setAddItemVisible] = useState(false);
   const [newItemDescription, setNewItemDescription] = useState('');
   const [newItemAttributes, setNewItemAttributes] = useState<Record<string, string>>({});
@@ -55,14 +55,25 @@ export default function GroupDetailScreen() {
   const syncingGroupIds = useAtomValue(syncingGroupIdsAtom);
   const isGroupSyncing = groupId ? syncingGroupIds.includes(groupId) : false;
 
+  // Debounce search query input to keep typing smooth with large item lists
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 200);
+
+    return () => clearTimeout(handler);
+  }, [searchQuery]);
+
   const loadLocalData = useCallback(async () => {
     if (!groupId || !authState.userId) return;
 
-    const [groupData, groupItems, attrs, membership] = await Promise.all([
+    const [groupData, groupItems, attrs, membership, attrMap, snobProfile] = await Promise.all([
       getGroup(groupId),
       getGroupItems(groupId, sortBy),
       getGroupAttributes(groupId),
       getUserMembership(groupId, authState.userId),
+      getGroupItemAttributes(groupId),
+      getSnobProfile(authState.userId),
     ]);
 
     setGroup(groupData);
@@ -70,16 +81,7 @@ export default function GroupDetailScreen() {
     setGroupAttributes(attrs);
     setMemberId(membership?.id || null);
     setMemberRole(membership?.role || null);
-
-    const snobProfile = await getSnobProfile(authState.userId);
     setIsPremiumUser(snobProfile?.isPremium ?? false);
-
-    const attrMap: Record<string, RankingItemAttribute[]> = {};
-    await Promise.all(
-      groupItems.map(async (item) => {
-        attrMap[item.id] = await getItemAttributes(item.id);
-      })
-    );
     setItemAttributesMap(attrMap);
     setHasLoadedLocal(true);
   }, [groupId, authState.userId, sortBy]);
@@ -126,8 +128,8 @@ export default function GroupDetailScreen() {
     }
   }, [loadData]);
 
+  // Show full spinner only if initial local load hasn't completed or there are 0 local items while syncing
   const showLoadingState = !hasLoadedLocal || (items.length === 0 && isGroupSyncing);
-  const showSyncBanner = hasLoadedLocal && items.length > 0 && isGroupSyncing;
 
   const handleAddItem = useCallback(async () => {
     if (!newItemDescription.trim() || !groupId || !memberId) return;
@@ -205,14 +207,31 @@ export default function GroupDetailScreen() {
     }
   }, [selectedImageUri, group, groupAttributes, attrSuggestions]);
 
-  // Filter items by search query
-  const filteredItems = items.filter((item) => {
-    if (!searchQuery.trim()) return true;
-    const query = searchQuery.toLowerCase();
-    if (item.description.toLowerCase().includes(query)) return true;
-    const attrs = itemAttributesMap[item.id] || [];
-    return attrs.some((a) => a.attributeValue.toLowerCase().includes(query));
-  });
+  // Filter items by debounced search query
+  const filteredItems = useMemo(() => {
+    const trimmed = debouncedSearchQuery.trim();
+    if (!trimmed) return items;
+    const query = trimmed.toLowerCase();
+    return items.filter((item) => {
+      if (item.description.toLowerCase().includes(query)) return true;
+      const attrs = itemAttributesMap[item.id] || [];
+      return attrs.some((a) => a.attributeValue.toLowerCase().includes(query));
+    });
+  }, [items, debouncedSearchQuery, itemAttributesMap]);
+
+  const renderItem = useCallback(
+    ({ item }: { item: RankingItem }) => (
+      <ItemCard
+        item={item}
+        attributes={itemAttributesMap[item.id] || []}
+        group={group}
+        onPress={() => router.push(`/group/${groupId}/item/${item.id}`)}
+      />
+    ),
+    [itemAttributesMap, group, groupId, router]
+  );
+
+  const keyExtractor = useCallback((item: RankingItem) => item.id, []);
 
   const handleOpenTopRankings = useCallback(async () => {
     if (!groupId) return;
@@ -242,26 +261,6 @@ export default function GroupDetailScreen() {
       <Stack.Screen
         options={{
           title: group?.name || 'Group',
-          headerRight: () => (
-            <View style={{ flexDirection: 'row' }}>
-              <IconButton
-                icon="account-group"
-                iconColor="#ffffff"
-                size={22}
-                onPress={() => router.push(`/group/${groupId}/members`)}
-                accessibilityLabel="View members"
-              />
-              {memberRole === 'ADMIN' && (
-                <IconButton
-                  icon="pencil"
-                  iconColor="#ffffff"
-                  size={22}
-                  onPress={() => router.push(`/group/form?groupId=${groupId}`)}
-                  accessibilityLabel="Edit group"
-                />
-              )}
-            </View>
-          ),
         }}
       />
 
@@ -304,22 +303,57 @@ export default function GroupDetailScreen() {
         </Menu>
       </View>
 
-      {/* Item count */}
-      {showSyncBanner && <GroupSyncBanner message="Updating items..." />}
-
+      {/* Item count and actions row */}
       <View style={styles.countRow}>
-        <Text variant="bodySmall" style={styles.countText}>
+        <Text variant="bodyMedium" style={styles.countText}>
           {searchQuery
-            ? `${filteredItems.length} of ${items.length} items`
-            : `${items.length} items`}
+            ? `${filteredItems.length.toLocaleString()} of ${items.length.toLocaleString()} items`
+            : `${items.length.toLocaleString()} items`}
         </Text>
-        {groupAttributes.length > 0 && (
-          <Pressable onPress={handleOpenTopRankings} accessibilityRole="button" accessibilityLabel="View top rankings by attribute">
-            <Text variant="bodySmall" style={styles.topRankingsLink}>
-              Top Rankings
-            </Text>
-          </Pressable>
-        )}
+        <View style={styles.rightActionsRow}>
+          {groupAttributes.length > 0 && (
+            <Pressable onPress={handleOpenTopRankings} accessibilityRole="button" accessibilityLabel="View top rankings by attribute">
+              <Text variant="bodyMedium" style={styles.topRankingsLink}>
+                Top Rankings
+              </Text>
+            </Pressable>
+          )}
+          <Menu
+            visible={groupMenuVisible}
+            onDismiss={() => setGroupMenuVisible(false)}
+            contentStyle={styles.menuContent}
+            anchor={
+              <Pressable
+                onPress={() => setGroupMenuVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Group options"
+                hitSlop={8}
+                style={styles.groupMenuTrigger}
+              >
+                <MaterialCommunityIcons name="dots-vertical" size={20} color="#546e7a" />
+              </Pressable>
+            }
+          >
+            <Menu.Item
+              title="Members"
+              leadingIcon="account-group"
+              onPress={() => {
+                setGroupMenuVisible(false);
+                router.push(`/group/${groupId}/members`);
+              }}
+            />
+            {memberRole === 'ADMIN' && (
+              <Menu.Item
+                title="Edit Group"
+                leadingIcon="pencil"
+                onPress={() => {
+                  setGroupMenuVisible(false);
+                  router.push(`/group/form?groupId=${groupId}`);
+                }}
+              />
+            )}
+          </Menu>
+        </View>
       </View>
 
       {showLoadingState ? (
@@ -344,15 +378,12 @@ export default function GroupDetailScreen() {
       ) : (
         <FlatList
           data={filteredItems}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <ItemCard
-              item={item}
-              attributes={itemAttributesMap[item.id] || []}
-              group={group}
-              onPress={() => router.push(`/group/${groupId}/item/${item.id}`)}
-            />
-          )}
+          keyExtractor={keyExtractor}
+          renderItem={renderItem}
+          initialNumToRender={15}
+          maxToRenderPerBatch={15}
+          windowSize={7}
+          removeClippedSubviews={Platform.OS === 'android'}
           contentContainerStyle={styles.list}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
@@ -546,10 +577,25 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 6,
+    paddingVertical: 8,
+    minHeight: 36,
   },
   countText: {
     color: '#546e7a',
+    fontSize: 14,
+    fontWeight: '500',
+    lineHeight: 20,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
+  },
+  rightActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  groupMenuTrigger: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   loadingContainer: {
     flex: 1,
@@ -623,7 +669,11 @@ const styles = StyleSheet.create({
   },
   topRankingsLink: {
     color: '#1565c0',
-    fontWeight: '500',
+    fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 20,
+    includeFontPadding: false,
+    textAlignVertical: 'center',
   },
   topRankingsModal: {
     backgroundColor: '#dfeffa',

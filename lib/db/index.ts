@@ -10,6 +10,7 @@ export {
   getItem,
   getGroupAttributes,
   getItemAttributes,
+  getGroupItemAttributes,
   getItemRankings,
   getUserRankingForItem,
   getSnobProfile,
