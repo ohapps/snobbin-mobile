@@ -114,9 +114,6 @@ npx expo run:android
 - ✅ Member invites and management
 - ✅ Group admin actions (beyond delete)
 - ✅ Group details
-- Bugs
-   - fix mobile search
-   - fix loading screen on every group load 
 
 ## Project Structure
 

@@ -269,6 +269,52 @@ export async function getItemAttributes(itemId: string): Promise<RankingItemAttr
   );
 }
 
+/**
+ * Gets all attribute values for all items in a group, mapped by item ID.
+ */
+export async function getGroupItemAttributes(
+  groupId: string
+): Promise<Record<string, RankingItemAttribute[]>> {
+  const rows = db.getAllSync<{
+    id: string;
+    item_id: string;
+    attribute_id: string;
+    attribute_value: string;
+    attr_name: string | null;
+  }>(
+    `SELECT ria.*, a.name as attr_name
+     FROM ranking_item_attributes ria
+     INNER JOIN ranking_items ri ON ri.id = ria.item_id
+     LEFT JOIN snob_group_attributes a ON a.id = ria.attribute_id
+     WHERE ri.group_id = ?
+     ORDER BY a.name`,
+    [groupId]
+  );
+
+  const result: Record<string, RankingItemAttribute[]> = {};
+  const seenMap: Record<string, Set<string>> = {};
+
+  for (const r of rows) {
+    if (!result[r.item_id]) {
+      result[r.item_id] = [];
+      seenMap[r.item_id] = new Set();
+    }
+    const dedupeKey = `${r.attr_name || r.attribute_id}:${r.attribute_value}`;
+    if (!seenMap[r.item_id].has(dedupeKey)) {
+      seenMap[r.item_id].add(dedupeKey);
+      result[r.item_id].push({
+        id: r.id,
+        itemId: r.item_id,
+        attributeId: r.attribute_id,
+        attributeValue: r.attribute_value,
+        attributeName: r.attr_name || '',
+      });
+    }
+  }
+
+  return result;
+}
+
 // ─── Rankings ────────────────────────────────────────────────────────────────
 
 /**

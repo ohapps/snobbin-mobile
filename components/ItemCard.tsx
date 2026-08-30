@@ -1,3 +1,4 @@
+import React from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Card, Text } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -12,7 +13,7 @@ interface ItemCardProps {
   onPress: () => void;
 }
 
-export default function ItemCard({ item, attributes, group, onPress }: ItemCardProps) {
+function ItemCard({ item, attributes, group, onPress }: ItemCardProps) {
   const maxRanking = group?.maxRanking ?? 5;
 
   return (
@@ -131,3 +132,5 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 });
+
+export default React.memo(ItemCard);
