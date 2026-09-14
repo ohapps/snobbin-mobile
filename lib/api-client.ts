@@ -140,7 +140,8 @@ export async function deleteItem(itemId: string): Promise<void> {
 // ─── AI Identification ───────────────────────────────────────────────────────
 
 export interface IdentifyItemPayload {
-  imageUrl: string;
+  imageUrl?: string;
+  description?: string;
   groupName: string;
   groupDescription: string;
   attributes: Array<{ id: string; name: string; existingValues: string[] }>;
@@ -149,15 +150,18 @@ export interface IdentifyItemPayload {
 export interface IdentifyItemResult {
   description: string;
   attributes: Array<{ id: string; value: string }>;
+  imageUrl?: string | null;
+  imagePublicId?: string | null;
 }
 
 /**
- * Calls the AI item detection endpoint with an image URL and group context.
+ * Calls the AI item detection endpoint with an image URL or description and group context.
  * Only works for premium users — returns 403 otherwise.
  */
 export async function identifyItem(payload: IdentifyItemPayload): Promise<IdentifyItemResult> {
   return apiPost('/api/identify-item', payload);
 }
+
 
 // ─── Group Operations ─────────────────────────────────────────────────────────
 
