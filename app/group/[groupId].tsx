@@ -46,7 +46,12 @@ export default function GroupDetailScreen() {
   const [newItemAttributes, setNewItemAttributes] = useState<Record<string, string>>({});
   const [attrSuggestions, setAttrSuggestions] = useState<Record<string, string[]>>({});
   const [selectedImageUri, setSelectedImageUri] = useState<string | null>(null);
+  const [uploadedCloudinaryImage, setUploadedCloudinaryImage] = useState<{
+    publicId: string;
+    url: string;
+  } | null>(null);
   const [saving, setSaving] = useState(false);
+
   const [isPremiumUser, setIsPremiumUser] = useState(false);
   const [isIdentifying, setIsIdentifying] = useState(false);
   const [hasLoadedLocal, setHasLoadedLocal] = useState(false);
@@ -136,10 +141,10 @@ export default function GroupDetailScreen() {
 
     setSaving(true);
     try {
-      // Upload image if one was selected
-      let imageId: string | null = null;
-      let imageUrl: string | null = null;
-      if (selectedImageUri) {
+      // Upload image if one was selected (and not already uploaded via AI)
+      let imageId: string | null = uploadedCloudinaryImage?.publicId || null;
+      let imageUrl: string | null = uploadedCloudinaryImage?.url || null;
+      if (!uploadedCloudinaryImage && selectedImageUri) {
         const uploaded = await uploadImage(selectedImageUri);
         imageId = uploaded.publicId;
         imageUrl = uploaded.url;
@@ -165,6 +170,7 @@ export default function GroupDetailScreen() {
       setNewItemDescription('');
       setNewItemAttributes({});
       setSelectedImageUri(null);
+      setUploadedCloudinaryImage(null);
       setAddItemVisible(false);
       await loadData();
     } catch (err) {
@@ -172,18 +178,30 @@ export default function GroupDetailScreen() {
     } finally {
       setSaving(false);
     }
-  }, [newItemDescription, newItemAttributes, selectedImageUri, groupId, memberId, loadData]);
+  }, [newItemDescription, newItemAttributes, selectedImageUri, uploadedCloudinaryImage, groupId, memberId, loadData]);
 
   const handleIdentifyWithAI = useCallback(async () => {
-    if (!selectedImageUri || !group) return;
+    if (!group) return;
+    const hasImage = !!selectedImageUri;
+    const hasDesc = !!newItemDescription.trim();
+    if (!hasImage && !hasDesc) return;
 
     setIsIdentifying(true);
     try {
-      // Upload image first to get a URL the backend can access
-      const uploaded = await uploadImage(selectedImageUri);
+      let uploadedUrl: string | undefined = undefined;
+      if (hasImage) {
+        if (uploadedCloudinaryImage) {
+          uploadedUrl = uploadedCloudinaryImage.url;
+        } else if (selectedImageUri) {
+          const uploaded = await uploadImage(selectedImageUri);
+          setUploadedCloudinaryImage(uploaded);
+          uploadedUrl = uploaded.url;
+        }
+      }
 
       const result = await identifyItem({
-        imageUrl: uploaded.url,
+        imageUrl: uploadedUrl,
+        description: hasDesc ? newItemDescription.trim() : undefined,
         groupName: group.name,
         groupDescription: group.description,
         attributes: groupAttributes.map((attr) => ({
@@ -200,12 +218,21 @@ export default function GroupDetailScreen() {
         attrMap[attr.id] = attr.value;
       }
       setNewItemAttributes(attrMap);
+
+      if (result.imageUrl && result.imagePublicId) {
+        setSelectedImageUri(result.imageUrl);
+        setUploadedCloudinaryImage({
+          publicId: result.imagePublicId,
+          url: result.imageUrl,
+        });
+      }
     } catch (err) {
       console.error('AI identification failed:', err);
     } finally {
       setIsIdentifying(false);
     }
-  }, [selectedImageUri, group, groupAttributes, attrSuggestions]);
+  }, [selectedImageUri, uploadedCloudinaryImage, newItemDescription, group, groupAttributes, attrSuggestions]);
+
 
   // Filter items by debounced search query
   const filteredItems = useMemo(() => {
@@ -448,7 +475,10 @@ export default function GroupDetailScreen() {
                 <IconButton
                   icon="close-circle"
                   size={20}
-                  onPress={() => setSelectedImageUri(null)}
+                  onPress={() => {
+                    setSelectedImageUri(null);
+                    setUploadedCloudinaryImage(null);
+                  }}
                   style={styles.removeImageButton}
                   iconColor="#B3261E"
                 />
@@ -460,7 +490,10 @@ export default function GroupDetailScreen() {
                   icon="image"
                   onPress={async () => {
                     const uri = await pickImage();
-                    if (uri) setSelectedImageUri(uri);
+                    if (uri) {
+                      setSelectedImageUri(uri);
+                      setUploadedCloudinaryImage(null);
+                    }
                   }}
                   compact
                   style={styles.imageButton}
@@ -472,7 +505,10 @@ export default function GroupDetailScreen() {
                   icon="camera"
                   onPress={async () => {
                     const uri = await takePhoto();
-                    if (uri) setSelectedImageUri(uri);
+                    if (uri) {
+                      setSelectedImageUri(uri);
+                      setUploadedCloudinaryImage(null);
+                    }
                   }}
                   compact
                   style={styles.imageButton}
@@ -484,7 +520,7 @@ export default function GroupDetailScreen() {
           </View>
 
           {/* AI Identification — premium only */}
-          {isPremiumUser && selectedImageUri && (
+          {isPremiumUser && (selectedImageUri || newItemDescription.trim().length > 0) && (
             <Button
               mode="outlined"
               icon="auto-fix"
@@ -496,6 +532,7 @@ export default function GroupDetailScreen() {
               Identify with AI
             </Button>
           )}
+
 
           <View style={styles.modalActions}>
             <Button mode="text" onPress={() => setAddItemVisible(false)}>
