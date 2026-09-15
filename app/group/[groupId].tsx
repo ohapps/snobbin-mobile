@@ -5,7 +5,9 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { useAtom, useAtomValue } from 'jotai';
+import { useFocusEffect } from '@react-navigation/native';
 import { authStateAtom, itemSortAtom, ItemSortOption, syncingGroupIdsAtom } from '../../store/atoms';
+
 import {
   getGroup,
   getGroupItems,
@@ -104,6 +106,12 @@ export default function GroupDetailScreen() {
     }
   }, [groupId, authState.userId, loadLocalData]);
 
+  useFocusEffect(
+    useCallback(() => {
+      loadLocalData();
+    }, [loadLocalData])
+  );
+
   useEffect(() => {
     let cancelled = false;
 
@@ -123,6 +131,7 @@ export default function GroupDetailScreen() {
       cancelled = true;
     };
   }, [groupId, authState.userId, sortBy, loadLocalData]);
+
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);

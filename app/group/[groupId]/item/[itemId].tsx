@@ -4,7 +4,6 @@ import { Button, Divider, IconButton, Text, TextInput, Surface, Portal, Modal } 
 import { Image } from 'expo-image';
 import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { useAtomValue } from 'jotai';
-import * as Crypto from 'expo-crypto';
 import { authStateAtom } from '../../../../store/atoms';
 import {
   getItem,
@@ -15,10 +14,10 @@ import {
   getUserMembership,
   getUserRankingForItem,
   getDistinctAttributeValues,
-  executeSQL,
   syncGroup,
 } from '../../../../lib/db';
-import { saveRanking, updateItem, deleteItem } from '../../../../lib/api-client';
+import { saveRanking, updateItem, deleteItem, createItem } from '../../../../lib/api-client';
+
 import { pickImage, takePhoto, uploadImage } from '../../../../lib/image-upload';
 import type { SnobGroup, RankingItem, RankingItemAttribute, Ranking, GroupAttribute } from '../../../../types/models';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -54,6 +53,14 @@ export default function ItemDetailScreen() {
   const [groupAttributes, setGroupAttributes] = useState<GroupAttribute[]>([]);
   const [attrSuggestions, setAttrSuggestions] = useState<Record<string, string[]>>({});
   const [editSaving, setEditSaving] = useState(false);
+
+  // Copy state
+  const [copyVisible, setCopyVisible] = useState(false);
+  const [copyDescription, setCopyDescription] = useState('');
+  const [copyAttributes, setCopyAttributes] = useState<Record<string, string>>({});
+  const [copyImageUri, setCopyImageUri] = useState<string | null>(null);
+  const [copySaving, setCopySaving] = useState(false);
+
 
   const loadData = useCallback(async () => {
     if (!itemId || !groupId || !authState.userId) return;
@@ -186,6 +193,83 @@ export default function ItemDetailScreen() {
     setEditVisible(true);
   }, [item, groupId, attributes]);
 
+  const openCopyModal = useCallback(async () => {
+    if (!item || !groupId) return;
+
+    // Pre-populate copy form with existing item values and " - copy" suffix
+    setCopyDescription(`${item.description} - copy`);
+    setCopyImageUri(item.imageUrl || null);
+
+    // Load group attributes and current item attribute values
+    const attrs = await getGroupAttributes(groupId);
+    setGroupAttributes(attrs);
+
+    const attrValues: Record<string, string> = {};
+    for (const attr of attributes) {
+      attrValues[attr.attributeId] = attr.attributeValue;
+    }
+    setCopyAttributes(attrValues);
+
+    // Load suggestions
+    const suggestions: Record<string, string[]> = {};
+    for (const attr of attrs) {
+      suggestions[attr.id] = await getDistinctAttributeValues(groupId as string, attr.id);
+    }
+    setAttrSuggestions(suggestions);
+
+    setCopyVisible(true);
+  }, [item, groupId, attributes]);
+
+  const handleSaveCopy = useCallback(async () => {
+    if (!copyDescription.trim() || !groupId) return;
+
+    setCopySaving(true);
+    try {
+      // Determine imageId and imageUrl
+      let imageId = item?.imageId || null;
+      let imageUrl = item?.imageUrl || null;
+
+      // If user selected a new/different local image
+      if (copyImageUri && copyImageUri !== item?.imageUrl) {
+        const uploaded = await uploadImage(copyImageUri);
+        imageId = uploaded.publicId;
+        imageUrl = uploaded.url;
+      } else if (!copyImageUri) {
+        imageId = null;
+        imageUrl = null;
+      }
+
+      // Build attribute list
+      const attrList = Object.entries(copyAttributes)
+        .filter(([_, value]) => value.trim())
+        .map(([attrId, value]) => ({ attributeId: attrId, attributeValue: value.trim() }));
+
+      // Create new item on backend
+      const created = await createItem({
+        groupId: groupId as string,
+        description: copyDescription.trim(),
+        imageId,
+        imageUrl,
+        attributes: attrList,
+      });
+
+      // Re-sync group so local DB includes the newly created item
+      await syncGroup(groupId as string);
+
+      setCopyVisible(false);
+
+      // Navigate to the newly copied item detail screen
+      if (created?.id) {
+        router.replace(`/group/${groupId}/item/${created.id}`);
+      }
+    } catch (err) {
+      console.error('Failed to copy item:', err);
+      Alert.alert('Error', 'Failed to copy item. Please try again.');
+    } finally {
+      setCopySaving(false);
+    }
+  }, [copyDescription, copyAttributes, copyImageUri, item, groupId, router]);
+
   const handleSaveEdit = useCallback(async () => {
     if (!editDescription.trim() || !itemId || !groupId) return;
 
@@ -298,15 +382,27 @@ export default function ItemDetailScreen() {
           </Text>
         )}
 
-        <Button
-          mode="text"
-          icon="pencil"
-          onPress={openEditModal}
-          compact
-          style={styles.editButton}
-        >
-          Edit Item
-        </Button>
+        <View style={styles.actionButtonsRow}>
+          <Button
+            mode="text"
+            icon="content-copy"
+            onPress={openCopyModal}
+            compact
+            style={styles.actionButton}
+          >
+            Copy Item
+          </Button>
+
+          <Button
+            mode="text"
+            icon="pencil"
+            onPress={openEditModal}
+            compact
+            style={styles.actionButton}
+          >
+            Edit Item
+          </Button>
+        </View>
 
         {memberRole === 'ADMIN' && (
           <Button
@@ -463,10 +559,102 @@ export default function ItemDetailScreen() {
             </Button>
           </View>
         </Modal>
+
+        {/* Copy Item Modal */}
+        <Modal
+          visible={copyVisible}
+          onDismiss={() => setCopyVisible(false)}
+          contentContainerStyle={styles.modal}
+        >
+          <Text variant="titleLarge" style={styles.modalTitle}>
+            Copy Item
+          </Text>
+
+          <ScrollView showsVerticalScrollIndicator={false} style={styles.modalScroll}>
+            <TextInput
+              label="Description"
+              value={copyDescription}
+              onChangeText={setCopyDescription}
+              mode="outlined"
+              style={styles.input}
+            />
+
+            {groupAttributes.map((attr) => (
+              <AutocompleteInput
+                key={attr.id}
+                label={attr.name}
+                value={copyAttributes[attr.id] || ''}
+                onChangeText={(text) =>
+                  setCopyAttributes((prev) => ({ ...prev, [attr.id]: text }))
+                }
+                suggestions={attrSuggestions[attr.id] || []}
+              />
+            ))}
+
+            {/* Image picker */}
+            <View style={styles.imagePickerRow}>
+              {copyImageUri ? (
+                <View style={styles.imagePreviewContainer}>
+                  {copyImageUri.startsWith('http') ? (
+                    <CachedImage uri={copyImageUri} style={styles.imagePreview} contentFit="cover" />
+                  ) : (
+                    <Image source={{ uri: copyImageUri }} style={styles.imagePreview} />
+                  )}
+                  <IconButton
+                    icon="close-circle"
+                    size={20}
+                    onPress={() => setCopyImageUri(null)}
+                    style={styles.removeImageBtn}
+                    iconColor="#B3261E"
+                  />
+                </View>
+              ) : null}
+              <View style={styles.imageButtons}>
+                <Button
+                  mode="outlined"
+                  icon="image"
+                  onPress={async () => {
+                    const uri = await pickImage();
+                    if (uri) setCopyImageUri(uri);
+                  }}
+                  compact
+                >
+                  Library
+                </Button>
+                <Button
+                  mode="outlined"
+                  icon="camera"
+                  onPress={async () => {
+                    const uri = await takePhoto();
+                    if (uri) setCopyImageUri(uri);
+                  }}
+                  compact
+                >
+                  Camera
+                </Button>
+              </View>
+            </View>
+          </ScrollView>
+
+          <View style={styles.modalActions}>
+            <Button mode="text" onPress={() => setCopyVisible(false)}>
+              Cancel
+            </Button>
+            <Button
+              mode="contained"
+              onPress={handleSaveCopy}
+              loading={copySaving}
+              disabled={copySaving || !copyDescription.trim()}
+            >
+              Create Copy
+            </Button>
+          </View>
+        </Modal>
       </Portal>
     </ScrollView>
   );
 }
+
 
 const styles = StyleSheet.create({
   container: {
@@ -543,17 +731,20 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
   },
-  divider: {
-    marginBottom: 12,
-  },
-  editButton: {
-    alignSelf: 'flex-start',
+  actionButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     marginTop: 12,
+  },
+  actionButton: {
+    margin: 0,
   },
   deleteButton: {
     alignSelf: 'flex-start',
     marginTop: 4,
   },
+
   modal: {
     backgroundColor: '#ffffff',
     marginHorizontal: 20,
