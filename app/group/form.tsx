@@ -424,7 +424,7 @@ export default function GroupFormScreen() {
           ))}
           {attributes.length === 0 && (
             <Text variant="bodySmall" style={styles.hintText}>
-              Attributes let members categorize items (e.g., "Brand", "Style").
+              Attributes let members categorize items (e.g., &quot;Brand&quot;, &quot;Style&quot;).
             </Text>
           )}
         </View>
